@@ -2,6 +2,7 @@ import multiprocessing
 import logging
 from functools import partial
 import time
+import psutil
 
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
 
@@ -47,24 +48,27 @@ def progress_monitor(n, progress_queue):
 def solve_n_queens_parallel_main(n):
     logging.info(f"Starting to solve {n}-queens puzzle.")
 
-    manager = multiprocessing.Manager()
-    progress_queue = manager.Queue()
+    available_memory = psutil.virtual_memory().available
+    process_count = min(multiprocessing.cpu_count(), n)
 
-    monitor_process = multiprocessing.Process(target=progress_monitor, args=(n, progress_queue))
-    monitor_process.start()
+    with multiprocessing.Manager() as manager:
+        progress_queue = manager.Queue()
 
-    with multiprocessing.Pool(multiprocessing.cpu_count()) as pool:
-        results = pool.map(partial(worker_task, n, progress_queue=progress_queue), range(n))
+        monitor_process = multiprocessing.Process(target=progress_monitor, args=(n, progress_queue))
+        monitor_process.start()
 
-    total_solutions = sum(results)
+        with multiprocessing.Pool(process_count) as pool:
+            results = pool.map(partial(worker_task, n, progress_queue=progress_queue), range(n))
 
-    monitor_process.join()
+        total_solutions = sum(results)
+
+        monitor_process.join()
 
     logging.info(f"Completed solving {n}-queens puzzle. Total solutions: {total_solutions}")
     return total_solutions
 
 
 if __name__ == "__main__":
-    n = 24
+    n = 18
     solutions = solve_n_queens_parallel_main(n)
     print(f"Number of solutions for {n}-queens puzzle: {solutions}")
